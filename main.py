@@ -61,7 +61,7 @@ class Mouse:  #ネズミ(AI)の管理
 class Cat:  #ネコ(プレイヤー)の管理
     def __init__(self):
         self.position = [1, 1]  # 初期位置
-        self.items = []  #所持しているアイテムリスト
+        self.items = {'L': 0, 'B': 0, 'S': 0}  #所持しているアイテムリスト
         self.extra_moves = 1
         self.mouse = Mouse()
         
@@ -86,22 +86,24 @@ class Cat:  #ネコ(プレイヤー)の管理
                     print("行き止まりDA★")
                     self.next_move(input("ネコの移動 (QWEADZXC): ").upper())  # ボードの外に出る場合は移動を停止
             self.extra_moves = 1  # 移動後はリセット
-                
+                        
     def use_item(self):  # アイテム使用処理
         while True:
-            available_items = {can_use: i for can_use, i in self.items.items() if i >= 1}
+            available_items = {can_use: count for can_use, count in self.items.items() if count > 0}
             if not available_items:
                 print("アイテムを所持してません")
                 break
             print(f"所持アイテム: {available_items}")
             choice = input("アイテムを使用(1:懐中電灯(L), 2:バケツ(B), 3:シューズ(S)), 4:キャンセル")
-            if choice in ["1", "2", "3", "4"]:
+            choice = int(choice)
+            if choice in [1, 2, 3, 4]:
                 if choice == 4:
                     print("アイテムの使用をキャンセルしました")
                     break
-                selected_item = list(self.items.keys())[choice-1]
-                if available_items.get(selected_item, 0) > 0:
-                    self.item[selected_item] -= 1
+                item_keys = list(self.items.keys())
+                selected_item = item_keys[choice - 1]
+                if self.items[selected_item] > 0:
+                    self.items[selected_item] -= 1
                     print(f"{selected_item}を使いました！")
                     break
                 else:
@@ -200,12 +202,18 @@ def game_loop():
             if check_win(cat.position, mouse.position):
                 print("勝利！ネズミが突っ込んできた！")
                 break
+
         else:
+            cat.use_item()
             cat_move = input("ネコの移動 (QWEADZXC): ").upper()
             cat.next_move(cat_move)
             if check_win(cat.position, mouse.position):
                 print("勝利！ネズミをつかまえた！")
                 break
+            elif cat.position == item.position:
+                print(f'{item.type}をゲット！')
+                cat.items[item.type] += 1 
+                item.position = [None, None]  
 
         turn_count += 1
     else:
