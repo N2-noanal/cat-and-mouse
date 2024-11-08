@@ -19,30 +19,32 @@ class Mouse:  #ネズミ(AI)の管理
         self.bucket_effect_active = False  # バケツの効果が適用されているかどうか
 
     def mouse_move(self, direction): #ねずみの移動先決定
+        """
         # バケツ効果があるときはランダム移動、通常は入力して移動
-        if self.bucket_effect_active:
+        if self.bucket_effect_active == True:
             self.random_move()
             self.bucket_effect_active = False  # バケツ効果をリセット
-        else:
-            x, y = self.position
-            direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
-            if direction in direction_map:
-                dx, dy = direction_map[direction]
-                nx, ny = x + dx, y + dy
-                if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH:
-                    if (nx, ny) not in self.loopholes:
-                        self.position = [nx, ny]
-                    elif self.loophole_usage > 0:
-                        # 抜け穴の使用回数があるなら、抜け穴を使用
-                        self.use_loophole(nx, ny)
-                    else:
-                        print("抜け穴はもう使用できません")
-                        self.mouse_move(input("ネズミの移動 (WASD): ").upper())
-                elif (nx, ny) in self.loopholes:
+        """
+        # else:
+        x, y = self.position
+        direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
+        if direction in direction_map:
+            dx, dy = direction_map[direction]
+            nx, ny = x + dx, y + dy
+            if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH-1:
+                if (nx, ny) not in self.loopholes:
+                    self.position = [nx, ny]
+                elif self.loophole_usage > 0:
+                    # 抜け穴の使用回数があるなら、抜け穴を使用
                     self.use_loophole(nx, ny)
                 else:
-                    print("行き止まりです")
+                    print("抜け穴はもう使用できません")
                     self.mouse_move(input("ネズミの移動 (WASD): ").upper())
+            elif (nx, ny) in self.loopholes:
+                self.use_loophole(nx, ny)
+            else:
+                print("行き止まりです")
+                self.mouse_move(input("ネズミの移動 (WASD): ").upper())
 
     def random_move(self, board):
         """バケツ効果によるランダム移動"""
@@ -78,43 +80,54 @@ class Mouse:  #ネズミ(AI)の管理
     
     def check_loophole_usage(self): #抜け穴の総使用回数の確認
         return self.loophole_usage
-
-    def activate_bucket_effect(self):
-        self.bucket_effect_active = True #バケツ効果を有効にする
         
         
 
 class Cat:  #ネコ(プレイヤー)の管理
     def __init__(self):
         self.position = [1, 1]  # 初期位置
-        self.items = {'L': 0, 'B': 0, 'S': 0}  #所持しているアイテムリスト
+        self.items = {'L': 10, 'B': 10, 'S': 10}  # 所持しているアイテムリスト
         self.extra_moves = 1
         self.mouse = Mouse()
-        # self.item = Item()
+        self.item = Item(cat_items)
         
-    def next_move(self, direction):  #ネコの移動先決定
+    def next_move(self, direction, mouse_position, item_position, item_type):#ネコの移動先決定
+        input_flag = True
         x, y = self.position
         direction_map = {"Q":(-1, -1), "W":(-1, 0), "E":(-1,1),
                          "A":(0,-1), "D":(0,1),
                          "Z":(1,-1), "X":(1,0), "C":(1,1)}
         if direction in direction_map:
             dx, dy = direction_map[direction]
-            # extra_movesを考慮した移動
-            for _ in range(self.extra_moves):
+            for hosuu in range(self.extra_moves):
                 nx, ny = x + dx, y + dy
                 print(nx,ny)
                 if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH-1:
                     self.position = [nx, ny]
-                    if check_win(self.position, self.mouse.position):
-                        print("勝利！ネズミをつかまえた！")
+                    if check_win(self.position, mouse_position):
                         break
+                    if check_get_item(self.position, item_position):
+                        print(f'{item_type}をゲット！')
+                        self.items[item_type] += 1 
+                        item_position = [None, None] 
                     x, y = nx, ny  # 更新された位置を次のステップの基準に
                 else:
-                    print("行き止まりDA★")
-                    self.next_move(input("ネコの移動 (QWEADZXC): ").upper())  # ボードの外に出る場合は移動を停止
-            self.extra_moves = 1  # 移動後はリセット
-                        
-    def use_item(self):  # アイテム使用処理
+                    if hosuu == 0:
+                        print("行き止まりDA★")
+                        while input_flag:
+                            next_cat = input("ネコの移動 (QWEADZXC): ").upper()  # ボードの外に出る場合は移動を停止
+                            if next_cat not in ["Q","W","E","A","D","Z","X","C"]:
+                                print("入力が適切ではありません。")
+                            else:
+                                input_flag = False
+                            self.next_move(next_cat, mouse_position, item_position, item_type)
+                    else:
+                        self.extra_moves = 1
+                        return
+            if self.extra_moves == 3:
+                self.extra_moves = 1
+
+    def use_item(self, vision_board, game_board):  # アイテム使用処理
         while True:
             available_items = {can_use: count for can_use, count in self.items.items() if count > 0}
             if not available_items:
@@ -134,7 +147,9 @@ class Cat:  #ネコ(プレイヤー)の管理
                     if self.items[selected_item] > 0:
                         self.items[selected_item] -= 1
                         print(f"{selected_item}を使いました！")
-                        self.item.apply_effect(self.position, _, selected_item)
+                        self.item.apply_effect(self.position, self.mouse, selected_item, vision_board, game_board)
+                        if selected_item == "S":
+                            self.extra_moves = 3
                         break
                     else:
                         print("そのアイテムを持っていない！")
@@ -156,52 +171,76 @@ class Item:  # アイテム3種の管理
         else:
             self.position = position
         
-    def apply_effect(self, cat, mouse, item):
+    def apply_effect(self, cat_position, mouse, item, vision_board, game_board):
+        print("こうかはつど～う") #テスト
         if item == "L":
-            self.light_used()
+            self.light_used(cat_position, vision_board, game_board)
         elif item == "B":
-            mouse.vis_range = 0
+            mouse.bucket_effect_active = True
+            print(mouse.bucket_effect_active)
         elif item == "S":
-            cat.extra_moves = 3
-        
-    def light_used(self, cat_position, board):
-        input("ライトをつかった！\n照らしたい方向を移動キーで選択：").upper()
+            pass
+            
+    def light_used(self, cat_position, vision_board):
+        light_dir = input("ライトをつかった！\n照らしたい方向を移動キーで選択：").upper()
+        if light_dir in ["Q","W","E","A","D","Z","X","C"]:
+            direction_map = {"Q":(-1, -1), "W":(-1, 0), "E":(-1,1),
+                            "A":(0,-1), "D":(0,1),
+                            "Z":(1,-1), "X":(1,0), "C":(1,1)}
+            dx, dy = direction_map[light_dir]
+            x, y = cat_position
 
+            while 0 <= x < BOARD_HEIGHT and 0 <= y < BOARD_WIDTH:
+                vision_board[x][y] = self.game_board[x][y]  # game_boardを表示
+                if vision_board[x][y] == "#":
+                    break
+                if [x, y] == self.mouse.position:
+                    vision_board[x][y] = "M"
+                if [x, y] == self.item.position:
+                    vision_board[x][y]
+                    
+                x += dx
+                y += dy
+                print("ライトの照らした結果")
+                print_board(vision_board)  # ライトで照らした結果
+                
+                    
 
 
 def make_board():
     return [["#" if i == 0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
 
 def update_vision_board(game_board, vision_board, cat_position, mouse_position, item_position, active_player, loopholes):
+    mouse = Mouse()
     if active_player == 'cat':
-        vision_range = 1  # Cat's vision range
+        vision_range = 1
         vision_center = cat_position
         other_position = mouse_position
-        display_other = 'M'  # Display symbol for mouse
+        display_other = 'M'
     else:
-        vision_range = 2  # Mouse's vision range
+        if mouse.bucket_effect_active == True:
+            vision_range = 0
+        else:
+            vision_range = 2
         vision_center = mouse_position
         other_position = cat_position
-        display_other = 'C'  # Display symbol for cat
+        display_other = 'C'
 
-    # Reset vision board to "unseen"
     for i in range(BOARD_HEIGHT):
         for j in range(BOARD_WIDTH):
             vision_board[i][j] = "X"
 
-    # Update visible cells based on vision range
     for i in range(max(0, vision_center[0] - vision_range), min(BOARD_HEIGHT, vision_center[0] + vision_range + 1)):
         for j in range(max(0, vision_center[1] - vision_range), min(BOARD_WIDTH, vision_center[1] + vision_range + 1)):
             vision_board[i][j] = game_board[i][j]
             if [i, j] == item_position:
                 vision_board[i][j] = 'I'
             if [i, j] == other_position:
-                vision_board[i][j] = display_other  # Optionally make this conditional
+                vision_board[i][j] = display_other
             for loophole in loopholes:
                 if [i, j] == list(loophole):
                     vision_board[i][j] = 'h'
 
-    # Mark the active player's position last to ensure it's visible
     vision_board[vision_center[0]][vision_center[1]] = 'C' if active_player == 'cat' else 'M'
 
     return vision_board
@@ -215,6 +254,9 @@ def print_board(board):
 def check_win(cat_position, mouse_position):
     return cat_position == mouse_position
 
+def check_get_item(cat_position, item_position):
+    return cat_position == item_position
+
 def game_loop():
     game_board = make_board()  # ゲーム全体の状態を管理するマップ
     vision_board = make_board()  # プレイヤーに表示されるマップ
@@ -222,42 +264,57 @@ def game_loop():
     cat = Cat()
     item = Item(cat_items)
     turn_count = 0
-    
-    while turn_count < 31:
+    game_over = False  # ゲームの終了を管理するフラグ
+
+    while turn_count < 31 and not game_over:  # ゲーム終了フラグを確認
         if turn_count % 2 == 1:
             # ネズミのターン
             active_player = 'mouse'
         else:
             # ネコのターン
             active_player = 'cat'
-        
+
         # ネコ、ネズミ、アイテムの位置を更新した表示マップを作成
         update_vision_board(game_board, vision_board, cat.position, mouse.position, item.position, active_player, mouse.loopholes)
-        print_board(vision_board)  # 表示マップを出力
-        
+        print_board(vision_board)  
+
         if turn_count % 2 == 1:
-            mouse_move = input("ネズミの移動 (WASD): ").upper()
-            mouse.mouse_move(mouse_move)
-            if check_win(cat.position, mouse.position):
-                print("勝利！ネズミが突っ込んできた！")
-                break
-
+            while True:
+                if mouse.bucket_effect_active == True:
+                    mouse.random_move()
+                    mouse.bucket_effect_active = False  # バケツ効果をリセット
+                    turn_count += 1
+                else:
+                    mouse_move = input("ネズミの移動 (WASD): ").upper()
+                    if mouse_move in ["W","A","S","D"]:
+                        mouse.mouse_move(mouse_move)
+                        if check_win(cat.position, mouse.position):
+                            print("勝利！ネズミが突っ込んできた！")
+                            game_over = True  # ゲーム終了フラグを設定
+                            break
+                        turn_count += 1
+                        print(f"残りのターン{15-int(turn_count/2)}")
+                        break
+                    else:
+                        print("入力が間違っていませんか？")
+                
         else:
-            cat.use_item()
-            cat_move = input("ネコの移動 (QWEADZXC): ").upper()
-            cat.next_move(cat_move)
-            if check_win(cat.position, mouse.position):
-                print("勝利！ネズミをつかまえた！")
-                break
-            elif cat.position == item.position:
-                print(f'{item.type}をゲット！')
-                cat.items[item.type] += 1 
-                item.position = [None, None]  
+            cat.use_item(vision_board,  game_board)
+            while True:
+                cat_move = input("ネコの移動 (QWEADZXC): ").upper()
+                if cat_move in ["Q","W","E","A","D","Z","X","C"]:
+                    cat.next_move(cat_move, mouse.position, item.position, item.type)
+                    if check_win(cat.position, mouse.position):
+                        print("勝利！ネズミをつかまえた！")
+                        game_over = True  # ゲーム終了フラグを設定
+                    turn_count += 1
+                    break
+                else:
+                    print("入力が間違っていませんか？")
+    
+    if not game_over:
+        print("ネズミに逃げられてしまった...")  # ターン数に到達してもゲームが終了しない場合
 
-        turn_count += 1
-    else:
-        print("ネズミに逃げられてしまった...")
-            
 def print_rule():
         print("=== ルール ===")
         # ターンについて
