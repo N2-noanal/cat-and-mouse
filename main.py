@@ -64,6 +64,7 @@ class Cat:  #ネコ(プレイヤー)の管理
         self.items = {'L': 0, 'B': 0, 'S': 0}  #所持しているアイテムリスト
         self.extra_moves = 1
         self.mouse = Mouse()
+        # self.item = Item()
         
     def next_move(self, direction):  #ネコの移動先決定
         x, y = self.position
@@ -95,21 +96,27 @@ class Cat:  #ネコ(プレイヤー)の管理
                 break
             print(f"所持アイテム: {available_items}")
             choice = input("アイテムを使用(1:懐中電灯(L), 2:バケツ(B), 3:シューズ(S)), 4:キャンセル")
-            choice = int(choice)
-            if choice in [1, 2, 3, 4]:
-                if choice == 4:
-                    print("アイテムの使用をキャンセルしました")
-                    break
-                item_keys = list(self.items.keys())
-                selected_item = item_keys[choice - 1]
-                if self.items[selected_item] > 0:
-                    self.items[selected_item] -= 1
-                    print(f"{selected_item}を使いました！")
-                    break
+
+            try:
+                choice = int(choice)
+                if choice in [1, 2, 3, 4]:
+                    if choice == 4:
+                        print("アイテムの使用をキャンセルしました")
+                        break
+                    item_keys = list(self.items.keys())
+                    selected_item = item_keys[choice - 1]
+                    if self.items[selected_item] > 0:
+                        self.items[selected_item] -= 1
+                        print(f"{selected_item}を使いました！")
+                        # self.item.apply_effect(self.position, _, selected_item)
+                        break
+                    else:
+                        print("そのアイテムを持っていない！")
                 else:
-                    print("そのアイテムを持っていない！")
-            else:
-                print("無効な入力です")
+                    print("無効な入力です。1から4の数字を入力してください。")
+            except ValueError:
+                print("無効な入力です。1~4の数字のみ入力してください。")
+
                     
 
 class Item:  # アイテム3種の管理
@@ -123,12 +130,12 @@ class Item:  # アイテム3種の管理
         else:
             self.position = position
         
-    def apply_effect(self, cat, mouse):
-        if self.type == "L":
+    def apply_effect(self, cat, mouse, item):
+        if item == "L":
             self.light_used()
-        elif self.type == "B":
+        elif item == "B":
             mouse.vis_range = 0
-        elif self.type == "S":
+        elif item == "S":
             cat.extra_moves = 3
         
     def light_used(self, cat_position, board):
@@ -141,28 +148,34 @@ def make_board():
 
 def update_vision_board(game_board, vision_board, cat_position, mouse_position, item_position, active_player, loopholes):
     if active_player == 'cat':
-        vision_range = 1  # ネコの視界範囲を1マスとする
-        vision_center = cat_position  # ネコが中心の視界を更新
+        vision_range = 1  # Cat's vision range
+        vision_center = cat_position
+        other_position = mouse_position
+        display_other = 'M'  # Display symbol for mouse
     else:
-        vision_range = 2  # ネズミの視界範囲を2マスとする
-        vision_center = mouse_position  # ネズミが中心の視界を更新
+        vision_range = 2  # Mouse's vision range
+        vision_center = mouse_position
+        other_position = cat_position
+        display_other = 'C'  # Display symbol for cat
 
-    # 全体のマップを'X'で初期化
+    # Reset vision board to "unseen"
     for i in range(BOARD_HEIGHT):
         for j in range(BOARD_WIDTH):
             vision_board[i][j] = "X"
 
-    # 視界範囲内のみ更新
+    # Update visible cells based on vision range
     for i in range(max(0, vision_center[0] - vision_range), min(BOARD_HEIGHT, vision_center[0] + vision_range + 1)):
         for j in range(max(0, vision_center[1] - vision_range), min(BOARD_WIDTH, vision_center[1] + vision_range + 1)):
             vision_board[i][j] = game_board[i][j]
             if [i, j] == item_position:
-                vision_board[i][j] = 'I'  # アイテム表示
+                vision_board[i][j] = 'I'
+            if [i, j] == other_position:
+                vision_board[i][j] = display_other  # Optionally make this conditional
             for loophole in loopholes:
                 if [i, j] == list(loophole):
-                    vision_board[i][j] = 'h'  # 抜け穴表示
+                    vision_board[i][j] = 'h'
 
-    # アクティブプレイヤーの位置を表示
+    # Mark the active player's position last to ensure it's visible
     vision_board[vision_center[0]][vision_center[1]] = 'C' if active_player == 'cat' else 'M'
 
     return vision_board
