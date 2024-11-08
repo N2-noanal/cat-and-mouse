@@ -15,27 +15,50 @@ class Mouse:  #ネズミ(AI)の管理
                           (1, 7): [(1, 1), (5, 1), (5, 6)], 
                           (5, 0): [(1, 1), (1, 6), (5, 6)], 
                           (5, 7): [(1, 1), (1, 6), (5, 1)]}
+        self.previous_position = None
+        self.bucket_effect_active = False  # バケツの効果が適用されているかどうか
 
     def mouse_move(self, direction): #ねずみの移動先決定
-        x, y = self.position
-        direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
-        if direction in direction_map:
-            dx, dy = direction_map[direction]
-            nx, ny = x + dx, y + dy
-            if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH:
-                if (nx, ny) not in self.loopholes:
-                    self.position = [nx, ny]
-                elif self.loophole_usage > 0:
-                    # 抜け穴の使用回数があるなら、抜け穴を使用
+        # バケツ効果があるときはランダム移動、通常は入力して移動
+        if self.bucket_effect_active:
+            self.random_move()
+            self.bucket_effect_active = False  # バケツ効果をリセット
+        else:
+            x, y = self.position
+            direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
+            if direction in direction_map:
+                dx, dy = direction_map[direction]
+                nx, ny = x + dx, y + dy
+                if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH:
+                    if (nx, ny) not in self.loopholes:
+                        self.position = [nx, ny]
+                    elif self.loophole_usage > 0:
+                        # 抜け穴の使用回数があるなら、抜け穴を使用
+                        self.use_loophole(nx, ny)
+                    else:
+                        print("抜け穴はもう使用できません")
+                        self.mouse_move(input("ネズミの移動 (WASD): ").upper())
+                elif (nx, ny) in self.loopholes:
                     self.use_loophole(nx, ny)
                 else:
-                    print("抜け穴はもう使用できません")
+                    print("行き止まりです")
                     self.mouse_move(input("ネズミの移動 (WASD): ").upper())
-            elif (nx, ny) in self.loopholes:
-                self.use_loophole(nx, ny)
-            else:
-                print("行き止まりです")
-                self.mouse_move(input("ネズミの移動 (WASD): ").upper())
+
+    def random_move(self, board):
+        """バケツ効果によるランダム移動"""
+        x, y = self.position
+        possible_moves = []
+
+        # 隣接する移動可能なマスを探す
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < len(board) and 0 <= ny < len(board[0]):
+                possible_moves.append((nx, ny))
+        
+        # ランダムに選んで移動
+        if possible_moves:
+            self.position = list(random.choice(possible_moves))
+            print(f"バケツ効果でランダムに移動しました: 新しい位置 {self.position}")
     
     def use_loophole(self, x, y):
         print("抜け穴を使用しました！")
@@ -55,15 +78,19 @@ class Mouse:  #ネズミ(AI)の管理
     
     def check_loophole_usage(self): #抜け穴の総使用回数の確認
         return self.loophole_usage
+
+    def activate_bucket_effect(self):
+        self.bucket_effect_active = True #バケツ効果を有効にする
         
         
 
 class Cat:  #ネコ(プレイヤー)の管理
     def __init__(self):
         self.position = [1, 1]  # 初期位置
-        self.items = []  #所持しているアイテムリスト
+        self.items = {'L': 0, 'B': 0, 'S': 0}  #所持しているアイテムリスト
         self.extra_moves = 1
         self.mouse = Mouse()
+        # self.item = Item()
         
     def next_move(self, direction):  #ネコの移動先決定
         x, y = self.position
@@ -86,31 +113,39 @@ class Cat:  #ネコ(プレイヤー)の管理
                     print("行き止まりDA★")
                     self.next_move(input("ネコの移動 (QWEADZXC): ").upper())  # ボードの外に出る場合は移動を停止
             self.extra_moves = 1  # 移動後はリセット
-                
+                        
     def use_item(self):  # アイテム使用処理
         while True:
-            available_items = {can_use: i for can_use, i in self.items.items() if i >= 1}
+            available_items = {can_use: count for can_use, count in self.items.items() if count > 0}
             if not available_items:
                 print("アイテムを所持してません")
                 break
             print(f"所持アイテム: {available_items}")
             choice = input("アイテムを使用(1:懐中電灯(L), 2:バケツ(B), 3:シューズ(S)), 4:キャンセル")
-            if choice in ["1", "2", "3", "4"]:
-                if choice == 4:
-                    print("アイテムの使用をキャンセルしました")
-                    break
-                selected_item = list(self.items.keys())[choice-1]
-                if available_items.get(selected_item, 0) > 0:
-                    self.item[selected_item] -= 1
-                    print(f"{selected_item}を使いました！")
-                    break
+
+            try:
+                choice = int(choice)
+                if choice in [1, 2, 3, 4]:
+                    if choice == 4:
+                        print("アイテムの使用をキャンセルしました")
+                        break
+                    item_keys = list(self.items.keys())
+                    selected_item = item_keys[choice - 1]
+                    if self.items[selected_item] > 0:
+                        self.items[selected_item] -= 1
+                        print(f"{selected_item}を使いました！")
+                        self.item.apply_effect(self.position, _, selected_item)
+                        break
+                    else:
+                        print("そのアイテムを持っていない！")
                 else:
-                    print("そのアイテムを持っていない！")
-            else:
-                print("無効な入力です")
+                    print("無効な入力です。1から4の数字を入力してください。")
+            except ValueError:
+                print("無効な入力です。1~4の数字のみ入力してください。")
+
                     
 
-class Item:  #アイテム3種の管理
+class Item:  # アイテム3種の管理
     def __init__(self, cat_items, position=None):
         available_items = [item for item in ITEMS if item not in cat_items]
         if not available_items:
@@ -121,12 +156,12 @@ class Item:  #アイテム3種の管理
         else:
             self.position = position
         
-    def apply_effect(self, cat, mouse):
-        if self.type == "L":
+    def apply_effect(self, cat, mouse, item):
+        if item == "L":
             self.light_used()
-        elif self.type == "B":
+        elif item == "B":
             mouse.vis_range = 0
-        elif self.type == "S":
+        elif item == "S":
             cat.extra_moves = 3
         
     def light_used(self, cat_position, board):
@@ -135,49 +170,54 @@ class Item:  #アイテム3種の管理
 
 
 def make_board():
-    return [["#" if i==0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
+    return [["#" if i == 0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
 
-def print_board(board, cat_position, mouse_position, item, loopholes):
-    loophole_positions = set(loopholes.keys())
+def update_vision_board(game_board, vision_board, cat_position, mouse_position, item_position, active_player, loopholes):
+    if active_player == 'cat':
+        vision_range = 1  # Cat's vision range
+        vision_center = cat_position
+        other_position = mouse_position
+        display_other = 'M'  # Display symbol for mouse
+    else:
+        vision_range = 2  # Mouse's vision range
+        vision_center = mouse_position
+        other_position = cat_position
+        display_other = 'C'  # Display symbol for cat
+
+    # Reset vision board to "unseen"
     for i in range(BOARD_HEIGHT):
         for j in range(BOARD_WIDTH):
-            char = board[i][j]
-            if [i, j] == cat_position:
-                char = 'C'
-            elif [i, j] == mouse_position:
-                char = 'M'
-            elif [i, j] == item.position:
-                char = item.type
-            for loophole in loophole_positions:
-                hole = list(loophole)
-                if [i, j] == hole:
-                    char = 'h'
-            print(char, end=' ')
-        print()
-    print()
-    
-"""    
-def blind(character,borad):
-    if board[y][x] == HIDDEN:
-        board[y][x] = 
-    if character == "cat":
-        cat_mask = [(-1, -1), (-1, 0), (-1,1),
-        (0,-1), (0,0), (0,1),
-        (1,-1), (1,0), (1,1)]
+            vision_board[i][j] = "X"
 
-    else:
-        mouse_mask = [(-2, -2), (-2, -1), (-2, 0), (-2, 1), (-2, 2),
-        (-1, -2), (-1, -1), (-1, 0), (-1, 1), (-1, 2),
-        (0, -2), (0, -1), (0, 0), (0, 1), (0, 2,),
-        (1, -2), (1, -1), (1, 0), (1, 1), (1,2),
-        (2, -2), (2, -1), (2, 0), (2, 1), (2, 2)]
-"""
+    # Update visible cells based on vision range
+    for i in range(max(0, vision_center[0] - vision_range), min(BOARD_HEIGHT, vision_center[0] + vision_range + 1)):
+        for j in range(max(0, vision_center[1] - vision_range), min(BOARD_WIDTH, vision_center[1] + vision_range + 1)):
+            vision_board[i][j] = game_board[i][j]
+            if [i, j] == item_position:
+                vision_board[i][j] = 'I'
+            if [i, j] == other_position:
+                vision_board[i][j] = display_other  # Optionally make this conditional
+            for loophole in loopholes:
+                if [i, j] == list(loophole):
+                    vision_board[i][j] = 'h'
+
+    # Mark the active player's position last to ensure it's visible
+    vision_board[vision_center[0]][vision_center[1]] = 'C' if active_player == 'cat' else 'M'
+
+    return vision_board
+
+
+def print_board(board):
+    for row in board:
+        print(" ".join(row))
+    print()
 
 def check_win(cat_position, mouse_position):
     return cat_position == mouse_position
 
 def game_loop():
-    board = make_board()
+    game_board = make_board()  # ゲーム全体の状態を管理するマップ
+    vision_board = make_board()  # プレイヤーに表示されるマップ
     mouse = Mouse()
     cat = Cat()
     item = Item(cat_items)
@@ -186,65 +226,66 @@ def game_loop():
     while turn_count < 31:
         if turn_count % 2 == 1:
             # ネズミのターン
-            print(f'ターン{turn_count//2+1}')
-            # blind("mouse")
-            print_board(board, cat.position, mouse.position, item, mouse.loopholes)
+            active_player = 'mouse'
+        else:
+            # ネコのターン
+            active_player = 'cat'
+        
+        # ネコ、ネズミ、アイテムの位置を更新した表示マップを作成
+        update_vision_board(game_board, vision_board, cat.position, mouse.position, item.position, active_player, mouse.loopholes)
+        print_board(vision_board)  # 表示マップを出力
+        
+        if turn_count % 2 == 1:
             mouse_move = input("ネズミの移動 (WASD): ").upper()
             mouse.mouse_move(mouse_move)
             if check_win(cat.position, mouse.position):
                 print("勝利！ネズミが突っ込んできた！")
                 break
-            turn_count += 1
+
         else:
-            # ネコのターン
-            #blind("cat")
-            print_board(board, cat.position, mouse.position, item, mouse.loopholes)
-            use_item = input("アイテムを使用しますか？(Y:使用, 他:使わない)").upper
-            if use_item == "Y" and cat.use_item():
-                pass
+            cat.use_item()
             cat_move = input("ネコの移動 (QWEADZXC): ").upper()
             cat.next_move(cat_move)
             if check_win(cat.position, mouse.position):
                 print("勝利！ネズミをつかまえた！")
                 break
-            if cat.position == item.position:
+            elif cat.position == item.position:
                 print(f'{item.type}をゲット！')
-                cat.items.append(item.type)
-                cat_items.append(item.type)
-                item.position = [None, None]
-            turn_count += 1
-            
+                cat.items[item.type] += 1 
+                item.position = [None, None]  
+
+        turn_count += 1
     else:
         print("ネズミに逃げられてしまった...")
-        
             
 def print_rule():
         print("=== ルール ===")
-        #ターンについて
-        print("#ターンについて")
+        # ターンについて
+        print("～ ターンについて ～")
         print("15ターン以内にネズミを捕まえたらネコの勝利です！")
         print("1ターンに1マス移動が必要です。")
         print("")
-        #移動方法について
-        print("#移動方法について")
+        # 移動方法について
+        print("～ 移動方法について ～")
         print("ネコの移動キー:\n↖q ↑w e↗\n←a s d→\n↙z ↓x c↘")
         print("ネズミの移動範囲は上下左右の4方向です。")
         print("")
-        #アイテム使用について
-        print("#アイテム使用について")
-        print("アイテムは\nL=ライト,S=シューズ,B=バケツ の三種類\n始めに部屋のどこかに1つ落ちているほか、\nネズミが抜け穴を使用するとランダムで1つ、\n使用された抜け穴の位置に生成されます。")
-        print("アイテムの使用方法：\n     数字キーにて  1=ライト、2=シューズ、3=バケツ\n   を所持しているアイテムに応じて押してください。\nアイテム使用をキャンセルしたい場合は、数字キー 0 を押してください。")
+        # アイテム使用について
+        print("～ アイテム使用について ～")
+        print("アイテムは\nL=ライト,S=シューズ,B=バケツ の三種類\nゲーム開始時に部屋のどこかに1つ落ちているほか、\nネズミが抜け穴(マップ上の「h」)を使用するとランダムで1つ、\n使用された抜け穴の位置に生成されます。")
+        print("☆ アイテムの使用方法 ☆\n     数字キーにて  1=ライト、2=シューズ、3=バケツ\n   を所持しているアイテムに応じて押してください。\nアイテム使用をキャンセルしたい場合は、数字キー 0 を押してください。")
         print("")
-        #視界範囲について
-        print("#視界範囲について")
-        print("ネコの視界:\n      〇 〇 〇\n      〇 Ｎ 〇\n      〇 〇 〇\n      Nをネコとすると〇が見える範囲となります。")
+        # 視界範囲について
+        print("～ 視界範囲について ～")
+        print("ネコの視界:\n      〇 〇 〇\n      〇 Ｃ 〇\n      〇 〇 〇\n      Ｃをネコとすると〇が見える範囲となります。")
         print("")
-        print("ネズミの視界:\n      〇 〇 〇 〇 〇\n      〇 〇 〇 〇 〇\n      〇 〇 Ｎ 〇 〇\n      〇 〇 〇 〇 〇\n      〇 〇 〇 〇 〇\n      Nをネズミとすると〇が見える範囲となります。")
+        print("ネズミの視界:\n      〇 〇 〇 〇 〇\n      〇 〇 〇 〇 〇\n      〇 〇 Ｍ 〇 〇\n      〇 〇 〇 〇 〇\n      〇 〇 〇 〇 〇\n      Ｍをネズミとすると〇が見える範囲となります。")
         print("")
+        # ゲーム開始
+        print("それでは、ゲームスタート！")
 
 
 
 if __name__ == "__main__":  #起動
     print_rule()
     game_loop()
-    pass
