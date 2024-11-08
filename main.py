@@ -15,27 +15,50 @@ class Mouse:  #ネズミ(AI)の管理
                           (1, 7): [(1, 1), (5, 1), (5, 6)], 
                           (5, 0): [(1, 1), (1, 6), (5, 6)], 
                           (5, 7): [(1, 1), (1, 6), (5, 1)]}
+        self.previous_position = None
+        self.bucket_effect_active = False  # バケツの効果が適用されているかどうか
 
     def mouse_move(self, direction): #ねずみの移動先決定
-        x, y = self.position
-        direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
-        if direction in direction_map:
-            dx, dy = direction_map[direction]
-            nx, ny = x + dx, y + dy
-            if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH:
-                if (nx, ny) not in self.loopholes:
-                    self.position = [nx, ny]
-                elif self.loophole_usage > 0:
-                    # 抜け穴の使用回数があるなら、抜け穴を使用
+        # バケツ効果があるときはランダム移動、通常は入力して移動
+        if self.bucket_effect_active:
+            self.random_move()
+            self.bucket_effect_active = False  # バケツ効果をリセット
+        else:
+            x, y = self.position
+            direction_map = {"W":(-1, 0),"A":(0,-1), "S":(1,0), "D":(0,1)}
+            if direction in direction_map:
+                dx, dy = direction_map[direction]
+                nx, ny = x + dx, y + dy
+                if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH:
+                    if (nx, ny) not in self.loopholes:
+                        self.position = [nx, ny]
+                    elif self.loophole_usage > 0:
+                        # 抜け穴の使用回数があるなら、抜け穴を使用
+                        self.use_loophole(nx, ny)
+                    else:
+                        print("抜け穴はもう使用できません")
+                        self.mouse_move(input("ネズミの移動 (WASD): ").upper())
+                elif (nx, ny) in self.loopholes:
                     self.use_loophole(nx, ny)
                 else:
-                    print("抜け穴はもう使用できません")
+                    print("行き止まりです")
                     self.mouse_move(input("ネズミの移動 (WASD): ").upper())
-            elif (nx, ny) in self.loopholes:
-                self.use_loophole(nx, ny)
-            else:
-                print("行き止まりです")
-                self.mouse_move(input("ネズミの移動 (WASD): ").upper())
+
+    def random_move(self, board):
+        """バケツ効果によるランダム移動"""
+        x, y = self.position
+        possible_moves = []
+
+        # 隣接する移動可能なマスを探す
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < len(board) and 0 <= ny < len(board[0]):
+                possible_moves.append((nx, ny))
+        
+        # ランダムに選んで移動
+        if possible_moves:
+            self.position = list(random.choice(possible_moves))
+            print(f"バケツ効果でランダムに移動しました: 新しい位置 {self.position}")
     
     def use_loophole(self, x, y):
         print("抜け穴を使用しました！")
@@ -55,6 +78,9 @@ class Mouse:  #ネズミ(AI)の管理
     
     def check_loophole_usage(self): #抜け穴の総使用回数の確認
         return self.loophole_usage
+
+    def activate_bucket_effect(self):
+        self.bucket_effect_active = True #バケツ効果を有効にする
         
         
 
@@ -108,7 +134,7 @@ class Cat:  #ネコ(プレイヤー)の管理
                     if self.items[selected_item] > 0:
                         self.items[selected_item] -= 1
                         print(f"{selected_item}を使いました！")
-                        # self.item.apply_effect(self.position, _, selected_item)
+                        self.item.apply_effect(self.position, _, selected_item)
                         break
                     else:
                         print("そのアイテムを持っていない！")
