@@ -7,7 +7,8 @@ ITEMS = ["L", "B", "S"]
 cat_items = []
 
 class Mouse:
-    def __init__(self):
+    def __init__(self, item):
+        self.item = item
         self.position = [5, 6]
         self.vision_range = 2
         self.loophole_usage = 2
@@ -32,21 +33,37 @@ class Mouse:
     def update_vision_board(self):
         self.vision_board = self.create_vision_board()
 
-    def find_closest_loophole(self):
+    def find_closest_loophole(self): #一番近い抜け穴を探す
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))
              for (x, y) in self.loopholes.keys()]
         )
         return distances[0][1]
 
-    def find_second_closest_loophole(self):
+    def find_second_closest_loophole(self): #二番目に近い抜け穴を探す
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))
              for (x, y) in self.loopholes.keys()]
         )
         return distances[1][1] if len(distances) > 1 else distances[0][1]
 
-    def move_towards_destination(self):
+    def move_towards_destination(self): #ねずみの移動処理
+        dx = self.destination[0] - self.position[0]
+        dy = self.destination[1] - self.position[1]
+
+        if abs(dx) > abs(dy):
+            new_x = self.position[0] + (1 if dx > 0 else -1)
+            if 0 < new_x < BOARD_HEIGHT-1: # 縦移動
+                self.position[0] = new_x
+        elif abs(dx) < abs(dy):
+            new_y = self.position[1] + (1 if dy > 0 else -1)
+            if 0 <= new_y < BOARD_WIDTH: # 横移動
+                self.position[1] = new_y
+        else:
+            self.update_destination_if_loophole_unavailable()
+            self.move_towards_destination_if_loophole_unavailable()
+
+    def move_towards_destination_if_loophole_unavailable(self): #抜け穴が使えないときのねずみの移動処理(抜け穴を埋めるため)
         dx = self.destination[0] - self.position[0]
         dy = self.destination[1] - self.position[1]
 
@@ -56,55 +73,52 @@ class Mouse:
                 self.position[0] = new_x
         else:
             new_y = self.position[1] + (1 if dy > 0 else -1)
-            if 0 < new_y < BOARD_WIDTH:
+            if 0 < new_y < BOARD_WIDTH-1:
                 self.position[1] = new_y
-
-        if self.position == self.destination:
-            self.use_loophole()
-
-    def use_loophole(self):
+                
+    def use_loophole(self): #抜け穴の使用時の処理
         pos = (self.position[0], self.position[1])
         if self.loophole_usage > 0 and pos in self.loopholes:
             print("抜け穴を使用しました！")
             self.loophole_usage -= 1
+            print(f"残り使用回数：{self.loophole_usage}")
             selected_exit = random.choice(self.loopholes[pos])
             self.position = list(selected_exit)
+            new_item_position = [pos[0], pos[1] + 1] if pos[1] == 0 else [pos[0], pos[1] - 1]
+            self.item.add_item(new_item_position)
 
-    def use_loophole_if_nearby(self, cat_position):
-        if tuple(self.position) in self.loopholes:
-            self.loophole_usage -= 1
-            exits = self.loopholes[tuple(self.position)]
-            farthest_exit = max(
-                exits, key=lambda e: abs(cat_position[0] - e[0]) + abs(cat_position[1] - e[1])
-            )
-            self.position = list(farthest_exit)
-            print(f"抜け穴を使用して移動: 新しい位置 {self.position}")
-        else:
-            print("入れないんじゃない。入らないだけだ。")
+    def update_destination_if_loophole_unavailable(self): #抜け穴が使えないときの目的地の決定(二番目に近い抜け穴)
+      if self.position in [[1, 1], [1, 6], [5, 1], [5, 6]]:
+        self.destination = self.find_second_closest_loophole()
 
-    def update_destination_if_cat_nearby(self):
-        closest_loophole = self.find_closest_loophole() # 2番目に近い穴
-        if closest_loophole != self.position:
-            print(f"ねこが視界に入ったため、目的地を最も近い抜け穴 {closest_loophole} に変更しました")
+    def update_destination_if_cat_nearby(self): #ねこが視界内にいるときの目的地の決定(一番近い抜け穴)
+        closest_loophole = self.find_closest_loophole()
+        #if closest_loophole != self.position:
+            #print(f"ねこが視界に入ったため、目的地を最も近い抜け穴 {closest_loophole} に変更しました")
         self.destination = closest_loophole
 
-    def auto_move(self, cat_position):
+    def is_cat_in_vision(self, cat_position): #視界内にねこがいるかの判別
+        mouse_x, mouse_y = self.position
+        cat_x, cat_y = cat_position
+        return abs(mouse_x - cat_x) <= self.vision_range and abs(mouse_y - cat_y) <= self.vision_range
+
+    def auto_move(self, cat_position): #ねずみの1ターン
         self.update_vision_board()
-        print(self.position) # てすと！！！!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
+        
         if self.is_cat_in_vision(cat_position):
-            print(f"ねこが視界に入った！位置: {cat_position}")
             self.update_destination_if_cat_nearby()
-            self.move_towards_destination()# 目的地に向かって移動させる
-            self.use_loophole()# 必要であれば抜け穴を使用
-
+            if self.loophole_usage > 0:
+                self.move_towards_destination()
+                self.use_loophole()# 必要であれば抜け穴を使用
+            else:
+                self.update_destination_if_loophole_unavailable()
+                self.move_towards_destination_if_loophole_unavailable()
         else:
-            print("いどうちゅ～")
-            self.move_towards_destination()
-            self.use_loophole()
-            print(f"現在の位置: {self.position}")
+            self.update_destination_if_loophole_unavailable()
+            self.move_towards_destination_if_loophole_unavailable()
 
-    def random_move(self):
+
+    def random_move(self): #バケツ使用時の行動処理
         x, y = self.position
         possible_moves = [
             (x + dx, y + dy)
@@ -114,7 +128,6 @@ class Mouse:
         if possible_moves:
             self.position = list(random.choice(possible_moves))
             print(f"バケツ効果でランダム移動しました: 新しい位置 {self.position}")
-
     def is_cat_in_vision(self, cat_position):
         mouse_x, mouse_y = self.position
         cat_x, cat_y = cat_position
@@ -147,12 +160,12 @@ class Mouse:
 class Cat:  #ネコ(プレイヤー)の管理
     def __init__(self):
         self.position = [1, 1]  # 初期位置
-        self.items = {'L': 10, 'B': 10, 'S': 10}  # 所持しているアイテムリスト
+        self.items = {'L': 0, 'B': 0, 'S': 0}  # 所持しているアイテムリスト
         self.extra_moves = 1
-        self.mouse = Mouse()
         self.item = Item(cat_items)
+        self.mouse = Mouse(self.item)
         
-    def next_move(self, direction, mouse_position, item_position, item_type):#ネコの移動先決定
+    def next_move(self, direction, mouse_position, item_position):#ネコの移動先決定
         input_flag = True
         x, y = self.position
         direction_map = {"Q":(-1, -1), "W":(-1, 0), "E":(-1,1),
@@ -162,15 +175,15 @@ class Cat:  #ネコ(プレイヤー)の管理
             dx, dy = direction_map[direction]
             for hosuu in range(self.extra_moves):
                 nx, ny = x + dx, y + dy
-                print(nx,ny)
                 if 0 < nx < BOARD_HEIGHT-1 and 0 < ny < BOARD_WIDTH-1:
                     self.position = [nx, ny]
                     if check_win(self.position, mouse_position):
                         break
-                    if check_get_item(self.position, item_position):
-                        print(f'{item_type}をゲット！')
-                        self.items[item_type] += 1 
-                        item_position = [None, None] 
+                    # got_item, _ = check_get_item(self.position, self.item.items)
+                    # print(got_item)
+                    # if got_item:
+                    #     print(f'{item_type}をゲット！')
+                    #     self.items[item_type] += 1 
                     x, y = nx, ny  # 更新された位置を次のステップの基準に
                 else:
                     if hosuu == 0:
@@ -181,7 +194,7 @@ class Cat:  #ネコ(プレイヤー)の管理
                                 print("入力が適切ではありません。")
                             else:
                                 input_flag = False
-                            self.next_move(next_cat, mouse_position, item_position, item_type)
+                            self.next_move(next_cat, mouse_position, item_position)
                     else:
                         self.extra_moves = 1
                         return
@@ -227,15 +240,28 @@ class Cat:  #ネコ(プレイヤー)の管理
                     
 
 class Item:  # アイテム3種の管理
-    def __init__(self, cat_items, position=None):
-        available_items = [item for item in ITEMS if item not in cat_items]
-        if not available_items:
-            available_items = ITEMS
-        self.type = random.choice(available_items)
-        if position is None:
-            self.position = [3, 4]
-        else:
-            self.position = position
+    def __init__(self, cat_items):
+        self.items = []
+        # self.items = {}
+        self.available_items = [item for item in ITEMS if item not in cat_items]
+        #if not self.available_items:
+        #    self.available_items = ITEMS
+        self.type = random.choice(self.available_items)
+        available_positions = [(i, j) for i in range(1, BOARD_HEIGHT - 1) for j in range(1, BOARD_WIDTH - 1)]
+        self.items.append(random.choice(available_positions))
+        #self.add_item([3, 4])
+    
+    def add_item(self, position):
+        self.items.append(position)
+        # item_type = random.choice(self.available_items)
+        # if item_type not in self.items:
+        #     self.items[item_type] = []
+        # self.items[item_type].append(position)
+        
+    def remove_item(self, position):
+        for p in self.items:
+            if p == position:
+                self.items.remove(position)
         
     def apply_effect(self, cat_position, item, game_board):
         print("こうかはつど～う")  # テスト
@@ -244,7 +270,7 @@ class Item:  # アイテム3種の管理
             light_positions = self.get_light_positions(light_dir, cat_position, game_board)
             return light_positions
         return[]
-            
+    
     def light_used(self):
         light_dir = input("ライトをつかった！\n照らしたい方向を移動キーで選択(QWEADZXC):").upper()
         while light_dir not in ["Q", "W", "E", "A", "D", "Z", "X", "C"]:
@@ -270,14 +296,12 @@ class Item:  # アイテム3種の管理
             y += dy
         return light_positions
 
-                
-                    
-
 
 def make_board():
     return [["#" if i == 0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
 
-def update_vision_board(game_board, vision_board, cat_position, mouse_position, item_position, active_player, loopholes, bucket_effect_active, light_effect_positions):
+def update_vision_board(game_board, vision_board, cat_position, mouse_position, item, active_player, loopholes, bucket_effect_active, light_effect_positions):
+    # item_positions = get_all_item_positions(item)
     if active_player == 'cat':
         vision_range = 1
         vision_center = cat_position
@@ -300,7 +324,7 @@ def update_vision_board(game_board, vision_board, cat_position, mouse_position, 
     for i in range(max(0, vision_center[0] - vision_range), min(BOARD_HEIGHT, vision_center[0] + vision_range + 1)):
         for j in range(max(0, vision_center[1] - vision_range), min(BOARD_WIDTH, vision_center[1] + vision_range + 1)):
             vision_board[i][j] = game_board[i][j]
-            if [i, j] == item_position:
+            if [i, j] in item:
                 vision_board[i][j] = 'I'
             if [i, j] == other_position:
                 vision_board[i][j] = display_other
@@ -314,16 +338,21 @@ def update_vision_board(game_board, vision_board, cat_position, mouse_position, 
             vision_board[x][y] = game_board[x][y]
             if [x, y] == other_position:
                 vision_board[x][y] = display_other
-            elif [x, y] == item_position:
+            elif [x, y] in item:
                 vision_board[x][y] = 'I'
             for loophole in loopholes:
                 if [x, y] == list(loophole):
                     vision_board[x][y] = 'h'
 
-    vision_board[vision_center[0]][vision_center[1]] = 'C' if active_player == 'cat' else 'M'
+    vision_board[vision_center[0]][vision_center[1]] = active_player.upper()[0]
 
     return vision_board
 
+# def get_all_item_positions(item):
+#     positions = []
+#     for i in item.items.values():
+#         positions.extend(i)
+#     return positions
 
 def print_board(board):
     for row in board:
@@ -334,18 +363,24 @@ def check_win(cat_position, mouse_position):
     return cat_position == mouse_position
 
 def check_get_item(cat_position, item_position):
-    return cat_position == item_position
+    if cat_position in item_position:
+        for i_p in item_position:
+            if cat_position == i_p:
+                return True, i_p
+    return False, None
 
 def game_loop():
     game_board = make_board()  # ゲーム全体の状態を管理するマップ
     vision_board = make_board()  # プレイヤーに表示されるマップ
-    mouse = Mouse()
     cat = Cat()
     item = Item(cat_items)
-    turn_count = 0
-    game_over = False  # ゲームの終了を管理するフラグ
+    mouse = Mouse(item)
+    turn_count = 1
+    game_over = False  # ゲームの終了を管理するフラグ1
     bucket_effect_active = False # バケツの管理フラグ
     light_effect_positions = []  # ライトの照らしたマスのリスト
+    
+    item.add_item([3, 4])
 
     while turn_count < 31 and not game_over:  # ゲーム終了フラグを確認
         if turn_count % 2 == 1:
@@ -356,8 +391,8 @@ def game_loop():
             active_player = 'cat'
 
         # ネコ、ネズミ、アイテムの位置を更新した表示マップを作成
-        update_vision_board(game_board, vision_board, cat.position, mouse.position, item.position, active_player, mouse.loopholes, bucket_effect_active, light_effect_positions)
-        print_board(vision_board)  
+        update_vision_board(game_board, vision_board, cat.position, mouse.position, item.items, active_player, mouse.loopholes, bucket_effect_active, light_effect_positions)
+        # print_board(vision_board)
 
         if turn_count % 2 == 1:
             while True:
@@ -368,6 +403,10 @@ def game_loop():
                     break
                 else:
                     mouse.auto_move(cat.position)
+                    if check_win(cat.position, mouse.position):
+                        print("勝利！ネズミが突っ込んできた！")
+                        game_over = True  # ゲーム終了フラグを設定
+                        break
                     turn_count += 1
                     print(f"残りのターン{15-int(turn_count/2)}")
                     break
@@ -387,16 +426,23 @@ def game_loop():
                     #     print("入力が間違っていませんか？")
             
         else:
+            print_board(vision_board)
             bucket_effect_active, l_positions = cat.use_item(game_board)
             for positions in l_positions:
                 light_effect_positions.append(positions)
             while True:
                 cat_move = input("ネコの移動 (QWEADZXC): ").upper()
                 if cat_move in ["Q","W","E","A","D","Z","X","C"]:
-                    cat.next_move(cat_move, mouse.position, item.position, item.type)
+                    cat.next_move(cat_move, mouse.position, item.items)
                     if check_win(cat.position, mouse.position):
                         print("勝利！ネズミをつかまえた！")
                         game_over = True  # ゲーム終了フラグを設定
+                    got_item, i_position = check_get_item(cat.position, item.items)    
+                    if got_item:
+                        item_type = random.choice(item.available_items)
+                        print(f'{item_type}をゲット！')
+                        cat.items[item_type] += 1 
+                        item.remove_item(i_position)
                     turn_count += 1
                     break
                 else:
