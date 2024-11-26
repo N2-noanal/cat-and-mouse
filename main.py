@@ -6,92 +6,70 @@ ITEMS = ["L", "B", "S"]
 
 cat_items = []
 
+
+
 class Mouse:
     def __init__(self, item):
         self.item = item
-        self.position = random.choice([[1,6],[5,6],[5,2],[5,3],[5,4]])
+        self.position = random.choice([[1, 6], [5, 6], [5, 2], [5, 3], [5, 4]])
+        self.last_seen_cat_position = None  # 最後に視認した猫の位置
         self.vision_range = 2
         self.loophole_usage = 2
         self.loopholes = {
             (1, 0): [(1, 6), (5, 1), (5, 6)],
             (1, 7): [(1, 1), (5, 1), (5, 6)],
             (5, 0): [(1, 1), (1, 6), (5, 6)],
-            (5, 7): [(1, 1), (1, 6), (5, 1)]
+            (5, 7): [(1, 1), (1, 6), (5, 1)],
         }
-        
+        self.destination = self.find_second_closest_loophole()
         self.vision_board = self.create_vision_board()
 
-    def create_vision_board(self, vision_range=2):
+    def create_vision_board(self):
+        """
+        ネズミの視界範囲を計算してボード上に反映
+        """
         vision_board = [[False for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
-        for dx in range(-vision_range, vision_range + 1):
-            for dy in range(-vision_range, vision_range + 1):
+        for dx in range(-self.vision_range, self.vision_range + 1):
+            for dy in range(-self.vision_range, self.vision_range + 1):
                 x, y = self.position[0] + dx, self.position[1] + dy
                 if 0 <= x < BOARD_HEIGHT and 0 <= y < BOARD_WIDTH:
                     vision_board[x][y] = True
         return vision_board
-        
-    def find_closest_loophole(self): #一番近い抜け穴を探す
+
+    def find_closest_loophole(self):
+        """
+        一番近い抜け穴を探す
+        """
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))
              for (x, y) in self.loopholes.keys()]
         )
         return distances[0][1]
 
-    def find_second_closest_loophole(self): #二番目に近い抜け穴を探す
+    def find_second_closest_loophole(self):
+        """
+        二番目に近い抜け穴を探す
+        """
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))
              for (x, y) in self.loopholes.keys()]
         )
-        return distances[1][1]
+        return distances[1][1] if len(distances) > 1 else distances[0][1]
 
-    def move_towards_destination(self): #ねずみの移動処理
-        self.destination = self.find_second_closest_loophole()
-        dx = self.destination[0] - self.position[0]
-        dy = self.destination[1] - self.position[1]
+    def is_within_bounds(self, x, y):
+        """
+        移動可能範囲の判定（抜け穴も考慮）
+        """
+        if 1 <= x <= 5 and 1 <= y <= 6:
+            return True
+        if (x, y) in self.loopholes.keys() and self.loophole_usage > 0:
+            return True
+        return False
 
-        if abs(dx) > abs(dy):
-            new_x = self.position[0] + (1 if dx > 0 else -1)
-            if 0 < new_x < BOARD_HEIGHT-1 and self.vision_board[new_x][self.position[1]]!="#": # 縦移動
-                self.position[0] = new_x
-            else:
-                new_y = self.position[1] + (1 if dy > 0 else -1)
-                if 0 < new_y < BOARD_WIDTH -1 and self.vision_board[self.position[0]][new_y]!="#":
-                    self.position[1] = new_y
-        else:
-            new_y = self.position[1] + (1 if dy > 0 else -1)
-            if 0 < new_y < BOARD_WIDTH-1 and self.vision_board[self.position[0]][new_y]!="#":
-                self.position[1] = new_y
-            else:
-                new_x = self.position[0] + (1 if dx > 0 else -1)
-                if 0 < new_x < BOARD_HEIGHT-1 and self.vision_board[new_x][self.position[1]]!="#": # 縦移動
-                    self.position[0] = new_x
-
-            self.update_destination_if_loophole_unavailable()
-            self.move_towards_destination_if_loophole_unavailable()
-
-    def move_towards_destination_if_loophole_unavailable(self): #抜け穴が使えないときのねずみの移動処理(抜け穴を埋めるため)
-        self.destination = self.find_second_closest_loophole()
-        dx = self.destination[0] - self.position[0]
-        dy = self.destination[1] - self.position[1]
-
-        if abs(dx) >= abs(dy):
-            new_x = self.position[0] + (1 if dx > 0 else -1)
-            if 0 < new_x < BOARD_HEIGHT:
-                self.position[0] = new_x
-            else:
-                new_y = self.position[1] +(1 if dy > 0 else -1)
-                if 0< new_y < BOARD_WIDTH-1:
-                    self.position[1] = new_y
-        else:
-            new_y = self.position[1] + (1 if dy > 0 else -1)
-            if 0 < new_y < BOARD_WIDTH-1:
-                self.position[1] = new_y
-            else:
-                new_x = self.position[0] +(1 if dx > 0 else -1)
-                if 0< new_x < BOARD_HEIGHT:
-                    self.position[0] = new_x
-                
-    def use_loophole(self): #抜け穴の使用時の処理
+    def use_loophole(self):
+        """
+        抜け穴の使用時の処理
+        """
         pos = (self.position[0], self.position[1])
         if self.loophole_usage > 0 and pos in self.loopholes:
             print(f"\n{Color.RED}<<<抜け穴を使用しました！！！！！！！！！！！！>>>{Color.RESET}")
@@ -102,52 +80,84 @@ class Mouse:
             new_item_position = [pos[0], pos[1] + 1] if pos[1] == 0 else [pos[0], pos[1] - 1]
             self.item.add_item(new_item_position)
 
-    def update_destination_if_loophole_unavailable(self): #抜け穴が使えないときの目的地の決定(二番目に近い抜け穴)
-      if self.position in [[1, 1], [1, 6], [5, 1], [5, 6]]:
-        self.destination = self.find_second_closest_loophole()
+    def update_vision_board(self):
+        """
+        視界範囲を更新
+        """
+        self.vision_board = self.create_vision_board()
 
-    def update_destination_if_cat_nearby(self): #ねこが視界内にいるときの目的地の決定(一番近い抜け穴)
-        closest_loophole = self.find_closest_loophole()
-        self.destination = closest_loophole
-
-    def is_cat_in_vision(self, cat_position): #視界内にねこがいるかの判別
+    def is_cat_in_vision(self, cat_position):
+        """
+        視界内に猫がいるかを確認
+        """
         mouse_x, mouse_y = self.position
         cat_x, cat_y = cat_position
         return abs(mouse_x - cat_x) <= self.vision_range and abs(mouse_y - cat_y) <= self.vision_range
 
-    def auto_move(self, cat_position): #ねずみの1ターン
-        if self.is_cat_in_vision(cat_position):
-            self.update_destination_if_cat_nearby()
-            if self.loophole_usage > 0:
-                self.move_towards_destination()
-                self.use_loophole()# 必要であれば抜け穴を使用
-            else:
-                self.update_destination_if_loophole_unavailable()
-                self.move_towards_destination_if_loophole_unavailable()
-        else:
-            self.update_destination_if_loophole_unavailable()
-            self.move_towards_destination_if_loophole_unavailable()
+    def move_towards_destination(self):
+        """
+        目的地（抜け穴など）に向けて移動
+        """
+        dx = self.destination[0] - self.position[0]
+        dy = self.destination[1] - self.position[1]
+
+        if abs(dx) > abs(dy):
+            self.position[0] += 1 if dx > 0 else -1
+        elif abs(dy) >= abs(dx):
+            self.position[1] += 1 if dy > 0 else -1
     
-    def random_move(self): #バケツ使用時の行動処理
+    def calculate_move_scores(self, cat_position):
+        """
+        移動候補のスコアを計算（猫との距離）
+        """
+        scores = {}
         x, y = self.position
+
+        # 上下左右の移動候補を生成
         possible_moves = [
             (x + dx, y + dy)
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
-            if (0 < x + dx < BOARD_HEIGHT - 1 and 0 < y + dy < BOARD_WIDTH - 1)
-            or (x + dx == 1 and y + dy == 0) or (x + dx == 1 and y + dy == 7) or (x + dx == 5 and y + dy == 0) or (x + dx == 5 and y + dy == 7)
+            if self.is_within_bounds(x + dx, y + dy)  # 移動範囲内か確認
         ]
-        if possible_moves:
-            print(self.loophole_usage)
-            self.position = list(random.choice(possible_moves))
-        if self.loophole_usage > 0:
+
+        # 各移動候補に対してスコアを計算（猫から遠ざかる距離をスコアとする）
+        for move in possible_moves:
+            distance_to_cat = abs(move[0] - cat_position[0]) + abs(move[1] - cat_position[1])
+            scores[move] = distance_to_cat
+
+        return scores
+
+    def auto_move(self, cat_position):
+        """
+        ネズミの自動行動ロジック（視界内外の処理を分岐）
+        """
+        self.update_vision_board()
+        if self.is_cat_in_vision(cat_position):
+            self.last_seen_cat_position = cat_position
+            # 移動候補のスコアを計算（猫から遠ざかる）
+            move_scores = self.calculate_move_scores(cat_position)
+            # スコアが最も高い方向に移動
+            if move_scores:
+                best_move = max(move_scores, key=move_scores.get)
+                self.position = list(best_move)
+            # 抜け穴が使えるなら使う
+            if tuple(self.position) in self.loopholes.keys() and self.loophole_usage > 0:
                 self.use_loophole()
         else:
-            self.random_move()
-            
-    def is_cat_in_vision(self, cat_position):
-        mouse_x, mouse_y = self.position
-        cat_x, cat_y = cat_position
-        return abs(mouse_x - cat_x) <= self.vision_range and abs(mouse_y - cat_y) <= self.vision_range
+            self.destination = self.find_second_closest_loophole()
+            self.move_towards_destination()
+
+    def random_move(self):
+        """
+        バケツなど、ランダムに移動する場合の処理
+        """
+        move_options = [
+            (self.position[0] + dx, self.position[1] + dy)
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]
+            if self.is_within_bounds(self.position[0] + dx, self.position[1] + dy)
+        ]
+        if move_options:
+            self.position = list(random.choice(move_options))
 
     # ネズミ手動バージョン
     # def mouse_move(self, direction): #ねずみの移動先決定
@@ -358,7 +368,7 @@ def update_vision_board(game_board, vision_board, cat_position, mouse_position, 
     # 目隠し
     for i in range(1,BOARD_HEIGHT-1):
         for j in range(1,BOARD_WIDTH-1):
-            vision_board[i][j] = "X" # 隠しマス
+            vision_board[i][j] = "X"
     for i in range(BOARD_HEIGHT-1):
         for j in range(BOARD_WIDTH):
             for loophole in loopholes:
