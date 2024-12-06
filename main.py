@@ -38,7 +38,7 @@ class Mouse:
 
     def find_closest_loophole(self):
         """
-        一番近い抜け穴探す
+        一番近い抜け穴を探す
         """
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))
@@ -345,7 +345,7 @@ class Color: # 文字色定義
 	CYAN           = '\033[36m'#(文字)シアン
 	RESET          = '\033[0m'#全てリセット
 
-
+  
 
 def make_board():
     return [["#" if i == 0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
