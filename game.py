@@ -38,7 +38,7 @@ class Mouse:
 
     def find_closest_loophole(self):
         """
-        一番近い抜け穴を探す
+        一番近い抜け穴探す
         """
         distances = sorted(
             [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y))

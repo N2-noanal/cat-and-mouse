@@ -344,8 +344,8 @@ class Color: # 文字色定義
 	MAGENTA        = '\033[35m'#(文字)マゼンタ
 	CYAN           = '\033[36m'#(文字)シアン
 	RESET          = '\033[0m'#全てリセット
- 
 
+  
 
 def make_board():
     return [["#" if i == 0 or j == 0 or i == BOARD_HEIGHT-1 or j == BOARD_WIDTH-1 else '.' for j in range(BOARD_WIDTH)] for i in range(BOARD_HEIGHT)]
@@ -469,6 +469,7 @@ def game_loop():
                     # print_board(vision_board)
                 if check_win(cat.position, mouse.position):
                     print(f"{Color.RED}勝利！ネズミが突っ込んできた！{Color.RESET}")
+                    print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
                     game_over = True  # ゲーム終了フラグを設定
                     break
                 turn_count += 1
@@ -516,6 +517,7 @@ def game_loop():
                         cat.next_move(cat_move, mouse.position, item.items)
                         if check_win(cat.position, mouse.position):
                             print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+                            print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
                             game_over = True  # ゲーム終了フラグを設定
                         turn_count += 1
                         break
@@ -527,6 +529,7 @@ def game_loop():
                         cat.next_move(cat_move, mouse.position, item.items)
                         if check_win(cat.position, mouse.position):
                             print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+                            print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
                             game_over = True  # ゲーム終了フラグを設定
                         turn_count += 1
                         break
@@ -535,6 +538,7 @@ def game_loop():
     
     if not game_over:
         print(f"{Color.BLUE}ネズミに逃げられてしまった...{Color.RESET}")  # ターン数に到達してもゲームが終了しない場合
+        print(f"⠀　　　{Color.YELLOW}+ ⊂⊃{Color.RESET}\n　 　　　∧_∧　{Color.YELLOW}+{Color.RESET}\n　　　　( ᴗ ̫ᴗ)\n　　　i⌒/ つつ          ε=ε=ε= ～(⌒C・>")
         final_position(cat.position, mouse.position, item.items, mouse.loopholes)
 
 def print_rule():
