@@ -482,7 +482,6 @@ class CatAI(Cat):
 
             if check_win(next_position, mouse_position):
                 self.position = next_position
-                print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
                 break
 
             got_item, i_position = check_get_item(next_position, item_positions)
@@ -698,11 +697,11 @@ def game_loop():
     game_over = False  # ゲームの終了を管理するフラグ1
     bucket_effect_active = False # バケツの管理フラグ
     light_effect_positions = []  # ライトの照らしたマスのリスト
-    cat_turn = 15-int(turn_count/2)+1
+    cat_turn = 25-int(turn_count/2)+1
     
     item.add_item([3, 4])
 
-    while turn_count < 31 and not game_over:  # ゲーム終了フラグを確認
+    while turn_count < 51 and not game_over:  # ゲーム終了フラグを確認
         if turn_count % 2 == 1:
             # ネズミのターン
             active_player = 'mouse'            
@@ -761,8 +760,9 @@ def game_loop():
             print_board(vision_board)
             bucket_effect_active, l_positions, light_effect = cat.decide_next_action(
                 mouse.position, item.items, game_board, turn_count, light_effect_positions)
-            if check_win(cat.position, mouse.position):
+            if check_win(list(cat.position), mouse.position):
                 print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+                print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
                 game_over = True
             for positions in l_positions:
                 light_effect_positions.append(positions)
