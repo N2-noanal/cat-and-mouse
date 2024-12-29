@@ -284,7 +284,260 @@ class Cat:  #ネコ(プレイヤー)の管理
             except ValueError:
                 print("無効な入力です。1~4の数字のみ入力してください。")
                 
-                    
+        
+            
+class CatAI(Cat):
+    def __init__(self):
+        super().__init__()
+        self.explored_corners = set()  # 探索済みの内側4つ角
+        self.inner_corners = [(2, 2), (2, 5), (4, 2), (4, 5)]  # 内側4つ角
+        self.reset_explored_corners = False  # 探索済みリセットフラグ
+        self.last_seen_turn = 0  # 最後にネズミを視認したターン数
+        self.last_seen_mouse_position = None # 最後にネズミを視認した位置
+
+    def decide_next_action(self, mouse_position, item_positions, game_board, current_turn, light_effect_positions):
+        """
+        ネコの次の行動を決定
+        """
+        # ネズミを追う
+        target = self.update_target_based_on_mouse(mouse_position, current_turn, light_effect_positions)
+        if target:
+            self.move_to_target(target, game_board)
+            return False, [], False
+        
+        # アイテムを使用
+        for item_type, count in self.items.items():
+            if count > 0:
+                bucket_effect_active, light_positions, light_effect = self.use_item_ai(game_board, mouse_position, item_positions)
+                return bucket_effect_active, light_positions, light_effect
+
+        # アイテムがボード上に存在するなら、最も近いアイテムに向かう
+        if item_positions:
+            closest_item = self.find_closest_target(item_positions)
+            self.move_to_target(closest_item, game_board)
+            got_item, i_position = check_get_item(list(self.position), item_positions) 
+            if got_item:
+                item_type = random.choice(self.item.available_items)
+                if item_type == 'L':
+                    print(f'{Color.YELLOW}🔶 ライト🔶{Color.RESET} をゲット！')
+                elif item_type == 'S':
+                    print(f'{Color.YELLOW}🔶 シューズ🔶{Color.RESET} をゲット！')
+                elif item_type == 'B':
+                    print(f"{Color.YELLOW}🔶 バケツ🔶{Color.RESET} をゲット！")
+                self.items[item_type] += 1 
+                self.item.remove_item(i_position, item_positions)
+                self.explored_corners.clear()
+                self.reset_explored_corners = True
+            return False, [], False
+
+        # 内側4つ角の探索
+        target_corner = self.find_closest_unexplored_corner()
+        if target_corner:
+            self.move_to_target(target_corner, game_board)
+        else:
+            self.explored_corners.clear()
+            self.reset_explored_corners = True
+        return False, [], False
+    
+    def update_target_based_on_mouse(self, mouse_position, current_turn, light_effect_positions):
+        """
+        ネズミの位置に基づいてターゲットを更新
+        """
+        if self.is_mouse_in_vision(mouse_position, light_effect_positions):
+            # ネズミが視界内にいる場合
+            self.last_seen_mouse_position = mouse_position
+            self.last_seen_turn = current_turn
+            return mouse_position
+        elif self.last_seen_mouse_position:
+            # ネズミが視界外の場合、最後に視認した位置から移動先を推定
+            elapsed_turns = current_turn - self.last_seen_turn
+            possible_positions = self.predict_mouse_position(elapsed_turns)
+            if possible_positions:
+                return self.find_closest_target(possible_positions)
+        return None
+
+    def is_mouse_in_vision(self, mouse_position, light_effect_positions):
+        """
+        ネズミが視界内にいるか確認
+        """
+        cat_x, cat_y = self.position
+        mouse_x, mouse_y = mouse_position
+        if abs(cat_x - mouse_x) <= 1 and abs(cat_y - mouse_y) <= 1:
+            return True
+        if (mouse_x, mouse_y) in light_effect_positions:
+            return True
+        return False
+
+    def predict_mouse_position(self, elapsed_turns):
+        """
+        最後に視認した位置と経過ターン数からネズミの可能な位置を推定する。
+        """
+        if not self.last_seen_mouse_position:
+            return []
+
+        x, y = self.last_seen_mouse_position
+        possible_positions = set()
+
+        # ネズミの移動範囲を計算
+        for dx in range(-elapsed_turns, elapsed_turns + 1):
+            for dy in range(-elapsed_turns, elapsed_turns + 1):
+                nx, ny = x + dx, y + dy
+                if 1 <= nx <= 5 and 1 <= ny <= 6:  # ボード内の範囲に限定
+                    possible_positions.add((nx, ny))
+
+        return list(possible_positions)
+
+    def find_closest_target(self, targets):
+        """
+        最も近いターゲット（アイテム、角）を見つける
+        """
+        distances = [(abs(self.position[0] - x) + abs(self.position[1] - y), (x, y)) for x, y in targets]
+        distances.sort()
+        return distances[0][1] if distances else None
+
+    def find_closest_unexplored_corner(self):
+        """
+        最も近い未探索の内側4つ角を探す
+        """
+        unexplored = [corner for corner in self.inner_corners if corner not in self.explored_corners]
+        if unexplored:
+            return self.find_closest_target(unexplored)
+        return None
+
+    def move_to_target(self, target, game_board):
+        """
+        ターゲット位置に向かって最短経路で移動
+        """
+        path = self.a_star_search(self.position, target, game_board)
+        if path and len(path) > 1:
+            self.position = path[1]
+        if self.position == target:
+            if target in self.inner_corners:
+                self.explored_corners.add(target)
+
+    def a_star_search(self, start, goal, game_board):
+        """
+        A*探索で最短経路を見つける
+        """
+        def heuristic(a, b):
+            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+        
+        start = tuple(start)
+        goal = tuple(goal)
+        open_list = [(0, start)]
+        came_from = {}
+        g_score = {start: 0}
+        f_score = {start: heuristic(start, goal)}
+
+        while open_list:
+            open_list.sort(key=lambda x: x[0])
+            current = open_list.pop(0)[1]
+
+            if current == goal:
+                return self.reconstruct_path(came_from, current)
+
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (1, -1), (-1, -1), (-1, 1)]:
+                neighbor = (current[0] + dx, current[1] + dy)
+                if 0 <= neighbor[0] < BOARD_HEIGHT and 0 <= neighbor[1] < BOARD_WIDTH and game_board[neighbor[0]][neighbor[1]] != "#":
+                    tentative_g_score = g_score[current] + 1
+
+                    if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                        came_from[neighbor] = current
+                        g_score[neighbor] = tentative_g_score
+                        f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                        # 重複を避けるため、open?listに同じノードがあれば削除する
+                        open_list = [node for node in open_list if node[1] != neighbor]
+                        open_list.append((f_score[neighbor], neighbor))
+
+    def reconstruct_path(self, came_from, current):
+        """
+        A*探索の経路を再構築
+        """
+        path = [current]
+        while current in came_from:
+            current = came_from[current]
+            path.append(current)
+        path.reverse()
+        return path
+    
+    def is_within_bounds(self, x, y):
+        """
+        移動可能範囲の判定
+        """
+        if 1 <= x <= 5 and 1 <= y <= 6:
+            return True
+        return False
+    
+    def move_with_shoes(self, mouse_position, item_positions, game_board):
+        """
+        シューズ使用時の移動ロジック
+        """
+        direction = self.determine_direction(item_positions)
+
+        for _ in range(self.extra_moves):
+            dx, dy = direction
+            next_position = [self.position[0] + dx, self.position[1] + dy]
+            if not self.is_within_bounds(next_position[0], next_position[1]) or game_board[next_position[0]][next_position[1]] == "#":
+                break
+
+            if check_win(next_position, mouse_position):
+                self.position = next_position
+                break
+
+            got_item, i_position = check_get_item(next_position, item_positions)
+            if got_item:
+                item_type = random.choice(self.item.available_items)
+                if item_type == 'L':
+                    print(f'{Color.YELLOW}🔶 ライト🔶{Color.RESET} をゲット！')
+                elif item_type == 'S':
+                    print(f'{Color.YELLOW}🔶 シューズ🔶{Color.RESET} をゲット！')
+                elif item_type == 'B':
+                    print(f"{Color.YELLOW}🔶 バケツ🔶{Color.RESET} をゲット！")
+                self.items[item_type] += 1
+                self.item.remove_item(i_position, item_positions)
+                self.explored_corners.clear()
+                self.reset_explored_corners = True
+
+            self.position = next_position
+    
+    def determine_direction(self, item_positions):
+        """
+        シューズ使用時に進む方向を決定
+        優先順位：アイテムの方向 > 探索モード
+        """
+        if item_positions:
+            closest_item = self.find_closest_target(item_positions)
+            return (closest_item[0] - self.position[0], closest_item[1] - self.position[1])
+
+        target_corner = self.find_closest_unexplored_corner()
+        if target_corner:
+            return (target_corner[0] - self.position[0], target_corner[1] - self.position[1])
+
+    def use_item_ai(self, game_board, mouse_position, item_positions):
+        """
+        アイテム使用
+        """
+        for item, count in self.items.items():
+            if count > 0:
+                light_positions = self.item.apply_effect(self.position, item, game_board)
+                if item == 'B':
+                    print(f"{Color.BLUE}バケツを使用しました！{Color.RESET}")
+                    self.items['B'] -= 1
+                    return True, light_positions, False
+                elif item == 'S':
+                    print(f"{Color.BLUE}シューズを使用しました！{Color.RESET}")
+                    self.extra_moves = 3
+                    self.items['S'] -= 1
+                    self.move_with_shoes(mouse_position, item_positions, game_board)
+                    self.extra_moves = 1
+                    return False, light_positions, False
+                elif item == 'L':
+                    print(f"{Color.BLUE}ライトを使用しました！{Color.RESET}")
+                    self.items['L'] -= 1
+                    return False, light_positions, True
+        return False
+
+
 
 class Item:  # アイテム3種の管理
     def __init__(self, cat_items):
@@ -386,7 +639,11 @@ def update_vision_board(game_board, vision_board, cat_position, mouse_position, 
             for loophole in loopholes:
                 if [i, j] == list(loophole):
                     vision_board[i][j] = f'{Color.BLACK}h{Color.RESET}'
-                    
+    
+    # アイテムの位置を表示（視界外でも見えるようにする）
+    for i_p in item:
+        vision_board[i_p[0]][i_p[1]] = f'{Color.MAGENTA}I{Color.RESET}'
+    
     # ライト効果の適用
     for x, y in light_effect_positions:
         if 0 <= x < BOARD_HEIGHT and 0 <= y < BOARD_WIDTH:
@@ -433,18 +690,18 @@ def check_get_item(cat_position, item_position):
 def game_loop():
     game_board = make_board()  # ゲーム全体の状態を管理するマップ
     vision_board = make_board()  # プレイヤーに表示されるマップ
-    cat = Cat()
+    cat = CatAI()
     item = Item(cat_items)
     mouse = Mouse(item)
     turn_count = 1
     game_over = False  # ゲームの終了を管理するフラグ1
     bucket_effect_active = False # バケツの管理フラグ
     light_effect_positions = []  # ライトの照らしたマスのリスト
-    cat_turn = 15-int(turn_count/2)+1
+    cat_turn = 25-int(turn_count/2)+1
     
     item.add_item([3, 4])
 
-    while turn_count < 31 and not game_over:  # ゲーム終了フラグを確認
+    while turn_count < 51 and not game_over:  # ゲーム終了フラグを確認
         if turn_count % 2 == 1:
             # ネズミのターン
             active_player = 'mouse'            
@@ -501,40 +758,52 @@ def game_loop():
             
         else:
             print_board(vision_board)
-            n = 0
-            while True:
-                if n == 0:
-                    cat_move = input("ネコの移動 (QWEADZXC) | アイテム使用 (I) : ").upper()
-                    if cat_move == "I":
-                        bucket_effect_active, l_positions, light_effect = cat.use_item(game_board)
-                        for positions in l_positions:
-                            light_effect_positions.append(positions)
-                        if light_effect:
-                            update_vision_board(game_board, vision_board, cat.position, mouse.position, item.items, active_player, mouse.loopholes, bucket_effect_active, light_effect_positions)
-                            print_board(vision_board)
-                        n += 1
-                    elif cat_move in ["Q","W","E","A","D","Z","X","C"]:
-                        cat.next_move(cat_move, mouse.position, item.items)
-                        if check_win(cat.position, mouse.position):
-                            print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
-                            print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
-                            game_over = True  # ゲーム終了フラグを設定
-                        turn_count += 1
-                        break
-                    else:
-                        print("入力が間違っている！！")
-                else:
-                    cat_move = input("ネコの移動 (QWEADZXC) : ").upper()
-                    if cat_move in ["Q","W","E","A","D","Z","X","C"]:
-                        cat.next_move(cat_move, mouse.position, item.items)
-                        if check_win(cat.position, mouse.position):
-                            print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
-                            print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
-                            game_over = True  # ゲーム終了フラグを設定
-                        turn_count += 1
-                        break
-                    else:
-                        print("入力が間違っていませんか？")
+            bucket_effect_active, l_positions, light_effect = cat.decide_next_action(
+                mouse.position, item.items, game_board, turn_count, light_effect_positions)
+            if check_win(list(cat.position), mouse.position):
+                print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+                print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
+                game_over = True
+            for positions in l_positions:
+                light_effect_positions.append(positions)
+            if light_effect:
+                update_vision_board(game_board, vision_board, cat.position, mouse.position, item.items, active_player, mouse.loopholes, bucket_effect_active, l_positions)
+                print_board(vision_board)
+            turn_count += 1
+            # n = 0
+            # while True:
+            #     if n == 0:
+            #         cat_move = input("ネコの移動 (QWEADZXC) | アイテム使用 (I) : ").upper()
+            #         if cat_move == "I":
+            #             bucket_effect_active, l_positions, light_effect = cat.use_item(game_board)
+            #             for positions in l_positions:
+            #                 light_effect_positions.append(positions)
+            #             if light_effect:
+            #                 update_vision_board(game_board, vision_board, cat.position, mouse.position, item.items, active_player, mouse.loopholes, bucket_effect_active, light_effect_positions)
+            #                 print_board(vision_board)
+            #             n += 1
+            #         elif cat_move in ["Q","W","E","A","D","Z","X","C"]:
+            #             cat.next_move(cat_move, mouse.position, item.items)
+            #             if check_win(cat.position, mouse.position):
+            #                 print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+            #                 print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
+            #                 game_over = True  # ゲーム終了フラグを設定
+            #             turn_count += 1
+            #             break
+            #         else:
+            #             print("入力が間違っている！！")
+            #     else:
+            #         cat_move = input("ネコの移動 (QWEADZXC) : ").upper()
+            #         if cat_move in ["Q","W","E","A","D","Z","X","C"]:
+            #             cat.next_move(cat_move, mouse.position, item.items)
+            #             if check_win(cat.position, mouse.position):
+            #                 print(f"{Color.RED}✨✨ 勝利！ネズミをつかまえた！✨✨{Color.RESET}")
+            #                 print("  |＼＿／|\n　|―　―  |\n　(o)(o)ノ_＿＿／/\n   \--/         /\n   m\/m |~~~    ヽ\n  mノm_／｣/_／＼｣")
+            #                 game_over = True  # ゲーム終了フラグを設定
+            #             turn_count += 1
+            #             break
+            #         else:
+            #             print("入力が間違っていませんか？")
     
     if not game_over:
         print(f"{Color.BLUE}ネズミに逃げられてしまった...{Color.RESET}")  # ターン数に到達してもゲームが終了しない場合
